@@ -13,7 +13,7 @@ import time
 import logging
 
 from Hackathon_ECI_SPRNS.venv.Schema.canonicalizer import canonicalize_nodes_relations
-from Hackathon_ECI_SPRNS.venv.ToT.perceptions import get_perception  # ✅ new import
+from Hackathon_ECI_SPRNS.venv.ToT.perceptions  import get_perception  # ✅ schema context injection
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -50,7 +50,12 @@ class BranchResult:
 # ---------------------------
 
 class LLMClient:
-    def complete(self, prompt: str, temperature: float = 0.0, max_tokens: int = 512) -> Tuple[str, Dict[str, Any]]:
+    def complete(
+            self,
+            prompt: str,
+            temperature: float = 0.0,
+            max_tokens: int = 512,
+    ) -> Tuple[str, Dict[str, Any]]:
         raise NotImplementedError("Implement provider-specific complete()")
 
 
@@ -117,41 +122,47 @@ def compute_step_score(parsed_json: Optional[Dict[str, Any]]) -> float:
     total, count, eps = 0.0, 0, 1e-6
     for n in parsed_json.get("nodes", []):
         c = n.get("confidence", None)
-        if c is None:
-            total += math.log(0.5 + eps)
-        else:
-            c = max(min(float(c), 0.999999), 1e-6)
-            total += math.log(c)
+        c = 0.5 if c is None else max(min(float(c), 0.999999), 1e-6)
+        total += math.log(c)
         count += 1
     for r in parsed_json.get("relations", []):
         c = r.get("confidence", None)
-        if c is None:
-            total += math.log(0.5 + eps)
-        else:
-            c = max(min(float(c), 0.999999), 1e-6)
-            total += math.log(c)
+        c = 0.5 if c is None else max(min(float(c), 0.999999), 1e-6)
+        total += math.log(c)
         count += 1
-    if count == 0:
-        return -2.0
-    return float(total)
+    return total if count > 0 else -2.0
 
 
 # ---------------------------
 # Prompt templates
 # ---------------------------
 
+ROOT_PROMPT_TEMPLATE = """You are a Knowledge-Graph extractor.
+Perception: {perception}
+Schema guidance:
+{schema_context}
+
+Chunk text:
+\"\"\"{chunk_text}\"\"\"
+
+TASK:
+Return JSON with arrays "nodes" and "relations".
+Each node: {{ "label": "...", "span": "...", "confidence": 0-1 }}
+Each relation: {{ "from": "...", "to": "...", "type": "...", "confidence": 0-1 }}
+If no new additions, return {{ "nodes": [], "relations": [] }}.
+"""
+
 STEP_PROMPT_TEMPLATE = """You are continuing KG extraction for Perception: {perception}
 Schema guidance:
 {schema_context}
 
-Chunk:
+Chunk text:
 \"\"\"{chunk_text}\"\"\"
 
 Partial graph so far (JSON): {partial_graph}
 
 TASK:
-Propose up to {max_add} augmentations (nodes/relations) strictly in JSON format as:
-{{ "nodes":[...], "relations":[...] }}.
+Propose up to {max_add} new nodes/relations strictly in JSON format.
 Each node/relation must include a confidence (0-1).
 If no new additions, return {{ "nodes": [], "relations": [] }}.
 """
@@ -198,14 +209,23 @@ class ToTOrchestrator:
                 },
             )
             current_graph, cumulative_score = {"nodes": [], "relations": []}, 0.0
+
             for step_idx in range(self.max_steps):
-                prompt = STEP_PROMPT_TEMPLATE.format(
-                    perception=(perception or "general"),
-                    schema_context=schema_ctx,
-                    chunk_text=chunk["raw_text"],
-                    partial_graph=json.dumps(current_graph),
-                    max_add=self.max_add_per_step,
-                )
+                if step_idx == 0:
+                    prompt = ROOT_PROMPT_TEMPLATE.format(
+                        perception=(perception or "general"),
+                        schema_context=schema_ctx,
+                        chunk_text=chunk["raw_text"],
+                    )
+                else:
+                    prompt = STEP_PROMPT_TEMPLATE.format(
+                        perception=(perception or "general"),
+                        schema_context=schema_ctx,
+                        chunk_text=chunk["raw_text"],
+                        partial_graph=json.dumps(current_graph),
+                        max_add=self.max_add_per_step,
+                    )
+
                 completion_text, meta = self.llm.complete(prompt, temperature=temperature)
                 parsed = safe_parse_json(completion_text)
                 step_score = compute_step_score(parsed)
