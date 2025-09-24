@@ -45,7 +45,12 @@ def _load_registry(path: str) -> Dict[str, Any]:
     if not os.path.exists(path):
         return {}
     with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+    # ensure embeddings are numpy arrays
+    for uid, meta in data.items():
+        if isinstance(meta.get("embedding"), list):
+            meta["embedding"] = np.array(meta["embedding"])
+    return data
 
 
 def load_registries():
@@ -57,8 +62,18 @@ def load_registries():
 
 def save_registries():
     """Persist registries to disk."""
-    _save_registry(NODE_REGISTRY_PATH, NODE_REGISTRY)
-    _save_registry(REL_REGISTRY_PATH, RELATION_REGISTRY)
+    # convert numpy arrays to lists for JSON
+    def prepare(registry: Dict[str, Any]) -> Dict[str, Any]:
+        out = {}
+        for uid, meta in registry.items():
+            m = meta.copy()
+            if isinstance(m.get("embedding"), np.ndarray):
+                m["embedding"] = m["embedding"].tolist()
+            out[uid] = m
+        return out
+
+    _save_registry(NODE_REGISTRY_PATH, prepare(NODE_REGISTRY))
+    _save_registry(REL_REGISTRY_PATH, prepare(RELATION_REGISTRY))
 
 
 # ---------------------------
@@ -90,8 +105,8 @@ def _find_match(
     uids, vecs = [], []
     for uid, meta in registry.items():
         if "embedding" in meta:
+            vecs.append(np.array(meta["embedding"]))
             uids.append(uid)
-            vecs.append(meta["embedding"])
     if not vecs:
         return None, 0.0
     sims = cosine_similarity([emb], vecs)[0]
@@ -113,10 +128,6 @@ def canonicalize_label(
 ) -> str:
     """
     Map a raw label to a canonical UID (creating if needed).
-    :param label: raw label string
-    :param perception: optional perception category (identity, txn, etc.)
-    :param threshold: cosine similarity threshold
-    :param is_relation: if True → relation registry; else → node registry
     """
     if not label:
         raise ValueError("Cannot canonicalize empty label")
@@ -126,6 +137,9 @@ def canonicalize_label(
     match_uid, sim = _find_match(emb, registry, threshold)
 
     if match_uid:
+        # update aliases
+        if label not in registry[match_uid].get("aliases", []):
+            registry[match_uid]["aliases"].append(label)
         return match_uid
 
     # Create new UID
@@ -133,7 +147,7 @@ def canonicalize_label(
     uid = f"schema::{prefix}::{label.lower()}::{uuid.uuid4().hex[:6]}"
     registry[uid] = {
         "label": label,
-        "embedding": emb.tolist(),  # store as list for JSON
+        "embedding": emb,
         "perception": perception,
         "aliases": [label],
     }
@@ -152,35 +166,42 @@ def canonicalize_nodes_relations(
     Endpoints in relations are remapped to canonical node UIDs.
     """
     new_graph = {"nodes": [], "relations": []}
-    node_map = {}  # raw span/label → canonical UID
+    node_map = {}  # span or label → canonical UID
 
     # Canonicalize nodes
     for n in graph_json.get("nodes", []):
         label = n.get("label")
+        if not label:
+            logger.warning("Skipping node with missing label: %s", n)
+            continue
         try:
             uid = canonicalize_label(label, perception=perception, threshold=threshold, is_relation=False)
         except ValueError:
             continue
-        node_map[(label, n.get("span"))] = uid
+        node_map[n.get("span") or label] = uid
         new_graph["nodes"].append({
             "uid": uid,
             "label": label,
             "span": n.get("span"),
             "confidence": n.get("confidence", 0.5),
             "props": n.get("props", {}),
+            "perception": perception,
         })
 
     # Canonicalize relations
     for r in graph_json.get("relations", []):
         rtype = r.get("type")
+        if not rtype:
+            logger.warning("Skipping relation with missing type: %s", r)
+            continue
         try:
             rel_uid = canonicalize_label(rtype, perception=perception, threshold=threshold, is_relation=True)
         except ValueError:
             continue
 
-        # map endpoints to canonical UIDs if available
-        from_uid = node_map.get((r.get("from"), None), r.get("from"))
-        to_uid = node_map.get((r.get("to"), None), r.get("to"))
+        # map endpoints using span or label
+        from_uid = node_map.get(r.get("from"), r.get("from"))
+        to_uid = node_map.get(r.get("to"), r.get("to"))
 
         new_graph["relations"].append({
             "uid": rel_uid,
@@ -188,6 +209,7 @@ def canonicalize_nodes_relations(
             "from": from_uid,
             "to": to_uid,
             "confidence": r.get("confidence", 0.5),
+            "perception": perception,
         })
 
     return new_graph
@@ -197,5 +219,4 @@ def canonicalize_nodes_relations(
 # Init
 # ---------------------------
 
-# Load registries on import
 load_registries()

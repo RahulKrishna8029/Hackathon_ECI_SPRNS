@@ -27,8 +27,13 @@ class PerceptionOrchestrator:
             max_branches_per_perception: int = 1,
             temperature: float = 0.0,
     ) -> Dict[str, BranchResult]:
+        """
+        Run ToT with one branch per perception across all chunks.
+        Returns dict { perception_name : BranchResult }.
+        """
         if perceptions is None:
             perceptions = list_perceptions().keys()
+
         results: Dict[str, BranchResult] = {}
 
         for pname in perceptions:
@@ -36,6 +41,7 @@ class PerceptionOrchestrator:
             perception = get_perception(pname)
 
             combined_graph, combined_steps, total_score = {"nodes": [], "relations": []}, [], 0.0
+            processed_chunks = []
 
             for chunk in chunks:
                 branches = self.base_orch.generate_branches(
@@ -43,6 +49,7 @@ class PerceptionOrchestrator:
                     perception=pname,
                     max_branches=max_branches_per_perception,
                     temperature=temperature,
+                    canonicalize=False,  # canonicalize explicitly below
                 )
                 if branches:
                     best = branches[0]
@@ -54,6 +61,7 @@ class PerceptionOrchestrator:
                     combined_graph = aggregate_step_to_graph(combined_graph, canon_graph)
                     combined_steps.extend(best.steps)
                     total_score += best.loglik
+                    processed_chunks.append(chunk["chunk_id"])
 
             br = BranchResult(
                 branch_id=f"perception_{pname}",
@@ -65,6 +73,7 @@ class PerceptionOrchestrator:
                 provenance={
                     "mode": "perception",
                     "schema_focus": perception.schema_focus,
+                    "processed_chunks": processed_chunks,  # ✅ track which chunks contributed
                 },
             )
             results[pname] = br
@@ -73,6 +82,9 @@ class PerceptionOrchestrator:
 
 
 def merge_perception_graphs(branches: Dict[str, BranchResult]) -> Dict[str, Any]:
+    """
+    Merge final (already canonicalized) graphs from all perceptions into one augmented KG.
+    """
     merged_graph = {"nodes": [], "relations": []}
     for br in branches.values():
         merged_graph = aggregate_step_to_graph(merged_graph, br.final_graph)
