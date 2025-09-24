@@ -8,6 +8,7 @@ Improvements:
  - vectorized batch projection when possible
  - robust save/load (JSON) and metadata
  - optional PyTorch learnable model preserved (experimental)
+ - helpers to infer dimension from sample fragments and fit directly from fragments
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import logging
 from typing import Optional, Tuple, List, Dict, Any
 import numpy as np
 from sklearn.decomposition import IncrementalPCA
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -65,17 +67,47 @@ def subspace_angle(U_old: Optional[np.ndarray], U_new: Optional[np.ndarray]) -> 
 class ProjectionModelPCA:
     """
     Principal Components based semantic subspace using IncrementalPCA.
+
+    You can construct with d specified, or call `infer_dim_from_fragments` /
+    `fit_from_fragments` to build from sample fragments (recommended).
     """
 
-    def __init__(self, d: int, k: int = 32, batch_size: int = 256, perceptions: Optional[List[str]] = None):
-        assert k < d, "k must be less than embedding dimension d"
-        self.d = d
-        self.k = k
-        self.batch_size = batch_size
-        self.ipca = IncrementalPCA(n_components=self.k, batch_size=self.batch_size)
+    def __init__(self, d: Optional[int] = None, k: int = 32, batch_size: int = 256,
+                 perceptions: Optional[List[str]] = None):
+        if d is not None:
+            assert k < d, "k must be less than embedding dimension d"
+        self.d = int(d) if d is not None else None
+        self.k = int(k)
+        self.batch_size = int(batch_size)
+        # Delay creating ipca until d is known
+        self.ipca: Optional[IncrementalPCA] = IncrementalPCA(n_components=self.k, batch_size=self.batch_size) if self.d else None
         self._fitted = False
         self.U: Optional[np.ndarray] = None  # d x k
         self.perceptions = perceptions or []
+        self.created_at = datetime.utcnow().isoformat()
+
+    # -------------------------
+    # Helpers to infer dims from fragments
+    # -------------------------
+
+    @staticmethod
+    def infer_dim_from_fragments(fragments: List[Any]) -> int:
+        """
+        Inspect a list of GraphFragment objects and return embedding dimension
+        based on phi_emb (preferred) or phi_raw.
+        """
+        for f in fragments:
+            if getattr(f, "phi_emb", None) is not None:
+                return int(np.asarray(f.phi_emb).reshape(-1).shape[0])
+            if getattr(f, "phi_raw", None) is not None:
+                return int(np.asarray(f.phi_raw).reshape(-1).shape[0])
+        raise ValueError("No fragment contains phi_emb or phi_raw to infer dimension")
+
+    def initialize_ipca_if_needed(self):
+        if self.d is None:
+            raise RuntimeError("Projector dimension d is not set. Call fit_from_fragments or set d in constructor.")
+        if self.ipca is None:
+            self.ipca = IncrementalPCA(n_components=self.k, batch_size=self.batch_size)
 
     # -------------------------
     # Fitting
@@ -84,6 +116,9 @@ class ProjectionModelPCA:
     def fit_initial(self, embeddings: np.ndarray):
         """Fit initial PCA on embeddings (N x d)."""
         embeddings = np.asarray(embeddings, dtype=np.float64)
+        if self.d is None:
+            self.d = embeddings.shape[1]
+            self.initialize_ipca_if_needed()
         if embeddings.ndim != 2 or embeddings.shape[1] != self.d:
             raise ValueError(f"embeddings must be shape (N, {self.d}); got {embeddings.shape}")
         logger.info("Fitting initial IncrementalPCA on %d samples (d=%d k=%d)", embeddings.shape[0], self.d, self.k)
@@ -95,6 +130,8 @@ class ProjectionModelPCA:
     def fit_incremental(self, embeddings: np.ndarray):
         """Incremental update using a batch of embeddings (N x d)."""
         embeddings = np.asarray(embeddings, dtype=np.float64)
+        if self.d is None:
+            raise ValueError("Model dimension 'd' unknown. Fit initial first or set d explicitly.")
         if embeddings.ndim != 2 or embeddings.shape[1] != self.d:
             raise ValueError(f"embeddings must be shape (N, {self.d}); got {embeddings.shape}")
         logger.info("Incremental PCA update with %d samples", embeddings.shape[0])
@@ -102,6 +139,34 @@ class ProjectionModelPCA:
         comps = self.ipca.components_.T
         self.U = orthonormalize_columns(comps)
         self._fitted = True
+
+    def fit_from_fragments(self, fragments: List[Any], normalize: bool = True):
+        """
+        Convenience: extract embeddings from fragments and fit PCA.
+        Accepts list of GraphFragment; prefers phi_emb, falls back to phi_raw.
+        """
+        if not fragments:
+            raise ValueError("No fragments provided")
+        d_infer = self.infer_dim_from_fragments(fragments)
+        self.d = d_infer
+        self.ipca = IncrementalPCA(n_components=self.k, batch_size=self.batch_size)
+        vecs = []
+        for f in fragments:
+            if getattr(f, "phi_emb", None) is not None:
+                e = np.asarray(f.phi_emb, dtype=float).reshape(-1)
+            elif getattr(f, "phi_raw", None) is not None:
+                e = np.asarray(f.phi_raw, dtype=float).reshape(-1)
+            else:
+                continue
+            if e.shape[0] != self.d:
+                raise ValueError(f"Fragment embedding dim {e.shape[0]} inconsistent with inferred d {self.d}")
+            if normalize:
+                nrm = np.linalg.norm(e)
+                if nrm > 0:
+                    e = e / nrm
+            vecs.append(e)
+        E = np.vstack(vecs).astype(np.float64)
+        self.fit_initial(E)
 
     # -------------------------
     # Projection helpers
@@ -133,7 +198,6 @@ class ProjectionModelPCA:
         E = np.asarray(embeddings, dtype=float)
         if E.ndim != 2 or E.shape[1] != self.d:
             raise ValueError(f"embeddings must be shape (N, {self.d})")
-        # P = U U^T; proj = E @ (U U^T).T = (E @ U) @ U.T
         coords = E @ self.U            # (N x k)
         proj = coords @ self.U.T      # (N x d)
         return proj
@@ -146,15 +210,14 @@ class ProjectionModelPCA:
     def _embedding_for_fragment(fragment) -> np.ndarray:
         """
         Prefer fragment.phi_emb (LLM embedding), fallback to phi_raw (must be of correct dim).
-        Returns 1D numpy array of length d.
+        Returns 1D numpy array.
         """
-        if hasattr(fragment, "phi_emb") and fragment.phi_emb is not None:
+        if getattr(fragment, "phi_emb", None) is not None:
             e = np.asarray(getattr(fragment, "phi_emb"), dtype=float).reshape(-1)
         elif getattr(fragment, "phi_raw", None) is not None:
             e = np.asarray(fragment.phi_raw, dtype=float).reshape(-1)
         else:
             raise ValueError("Fragment has neither 'phi_emb' nor 'phi_raw' available")
-
         return e
 
     def project_fragment(self, fragment) -> Dict[str, Any]:
@@ -163,6 +226,8 @@ class ProjectionModelPCA:
         Accepts fragment objects with phi_emb OR phi_raw.
         """
         e = self._embedding_for_fragment(fragment)
+        if self.d is None:
+            raise RuntimeError("Projector dimension unknown; call fit_from_fragments() or set d.")
         if e.shape[0] != self.d:
             raise ValueError(f"Fragment embedding dim {e.shape[0]} != projector dim {self.d}")
         proj = self.project(e)
@@ -180,10 +245,14 @@ class ProjectionModelPCA:
         Efficiently project a list of fragments by collecting embeddings, projecting vectorized,
         and returning per-fragment dicts.
         """
+        if not fragments:
+            return []
         Es = []
         ids = []
         for f in fragments:
             e = self._embedding_for_fragment(f)
+            if self.d is None:
+                self.d = e.shape[0]
             if e.shape[0] != self.d:
                 raise ValueError(f"Fragment {getattr(f,'fragment_id',None)} embedding dim {e.shape[0]} != {self.d}")
             Es.append(e)
@@ -207,12 +276,16 @@ class ProjectionModelPCA:
     # -------------------------
 
     def save(self, path: str):
-        """Save to JSON (U as nested list)."""
+        """Save to JSON (U as nested list) along with metadata."""
+        if self.U is None:
+            raise RuntimeError("Nothing to save: model U not set")
         obj = {
             "d": int(self.d),
             "k": int(self.k),
-            "U": self.U.tolist() if self.U is not None else None,
+            "U": self.U.tolist(),
             "perceptions": self.perceptions,
+            "created_at": self.created_at,
+            "saved_at": datetime.utcnow().isoformat(),
         }
         with open(path, "w", encoding="utf-8") as f:
             json.dump(obj, f)
@@ -226,6 +299,7 @@ class ProjectionModelPCA:
         if obj.get("U") is not None:
             model.U = np.array(obj["U"], dtype=float)
             model._fitted = True
+            model.ipca = IncrementalPCA(n_components=model.k, batch_size=model.batch_size)
         return model
 
 

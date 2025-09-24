@@ -140,3 +140,7 @@ class MockLLMClient(LLMClient):
             np.random.seed(abs(hash(t)) % (2**32))
             out.append(np.random.rand(self.dim).tolist())
         return out
+
+    def embed_batch(self, texts: List[str], model: str = "text-embedding-3-large") -> List[List[float]]:
+        resp = openai.embeddings.create(model=model, input=texts)
+        return [d["embedding"] for d in resp["data"]]

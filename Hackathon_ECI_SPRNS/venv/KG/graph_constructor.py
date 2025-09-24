@@ -7,7 +7,7 @@ import uuid
 import numpy as np
 import logging
 from dataclasses import dataclass
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from Hackathon_ECI_SPRNS.venv.Schema import canonicalizer
 
@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------
 
 @dataclass
+# src/kg/graph_constructor.py
+
+@dataclass
 class GraphFragment:
     fragment_id: str
     entity_id: str
@@ -26,6 +29,8 @@ class GraphFragment:
     relations: List[Dict[str, Any]]
     phi_raw: np.ndarray
     provenance: Dict[str, Any]
+    phi_emb: Optional[np.ndarray] = None  # ✅ LLM embedding, set later by encoder
+
 
 
 # ---------------------------
