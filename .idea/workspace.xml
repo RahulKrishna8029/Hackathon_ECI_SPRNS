@@ -5,9 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="28614743-e026-4aeb-a723-9dc82cd16114" name="Changes" comment="canonicalization of grpahs in defined and integrated into orchestrator">
-      <change afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/KG/graph_constructor.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/Ingestion/chunker.py" beforeDir="false" afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/Ingestion/chunker.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/ToT/orchestrator.py" beforeDir="false" afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/ToT/orchestrator.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/Dashboard/sprns_ui.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -35,22 +33,22 @@
     &quot;assignee&quot;: &quot;EbenezerPraveen&quot;
   }
 }</component>
-  <component name="GithubPullRequestsUISettings"><![CDATA[{
-  "selectedUrlAndAccountId": {
-    "url": "https://github.com/RahulKrishna8029/Hackathon_ECI_SPRNS.git",
-    "accountId": "617eeca4-59d7-482a-9c6f-370e1590f012"
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/RahulKrishna8029/Hackathon_ECI_SPRNS.git&quot;,
+    &quot;accountId&quot;: &quot;617eeca4-59d7-482a-9c6f-370e1590f012&quot;
   },
-  "recentNewPullRequestHead": {
-    "server": {
-      "useHttp": false,
-      "host": "github.com",
-      "port": null,
-      "suffix": null
+  &quot;recentNewPullRequestHead&quot;: {
+    &quot;server&quot;: {
+      &quot;useHttp&quot;: false,
+      &quot;host&quot;: &quot;github.com&quot;,
+      &quot;port&quot;: null,
+      &quot;suffix&quot;: null
     },
-    "owner": "RahulKrishna8029",
-    "repository": "Hackathon_ECI_SPRNS"
+    &quot;owner&quot;: &quot;RahulKrishna8029&quot;,
+    &quot;repository&quot;: &quot;Hackathon_ECI_SPRNS&quot;
   }
-}]]></component>
+}</component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 2
 }</component>
@@ -67,13 +65,13 @@
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "git-widget-placeholder": "rahul",
+    "git-widget-placeholder": "EB-3",
     "ignore.virus.scanning.warn.message": "true",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "C:/Users/ASUS/Documents/GitHub/Hackathon_ECI_SPRNS/Hackathon_ECI_SPRNS/venv/Dashboard",
-    "project.structure.last.edited": "Modules",
+    "project.structure.last.edited": "Project",
     "project.structure.proportion": "0.15",
-    "project.structure.side.proportion": "0.2",
+    "project.structure.side.proportion": "0.0",
     "settings.editor.selected.configurable": "configurable.group.tools"
   }
 }]]></component>
