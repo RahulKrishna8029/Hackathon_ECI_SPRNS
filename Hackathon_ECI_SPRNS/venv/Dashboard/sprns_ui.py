@@ -37,3 +37,9 @@ if user_input:
     st.chat_message("assistant").write(reply)
 
 
+# # Clear chat button
+# if st.button("Clear Chat"):
+#     st.session_state["messages"] = [
+#         {"role": "system", "content": "You are a helpful assistant inside sprns."}
+#     ]
+#     st.experimental_rerun()
