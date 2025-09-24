@@ -3,7 +3,7 @@ import time
 import streamlit as st
 
 st.set_page_config(page_title="sprns Chat UI", layout="centered")
-st.title("🤖 sprns Chat UI")
+st.title("🤖 Sprns Chat UI")
 
 # Session-state initialization
 if "messages" not in st.session_state:
