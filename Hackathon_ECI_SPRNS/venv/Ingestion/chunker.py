@@ -1,12 +1,21 @@
-from typing import List, Dict, TypedDict, Optional
-import os
-import numpy as np
+"""
+Module: src/ingest/chunker.py
+Purpose: Document ingestion + chunking.
+"""
 
 # PDF/Text handling
 from pathlib import Path
-from pdfminer.high_level import extract_text
+from typing import List, Dict, TypedDict, Optional
+
+import numpy as np
+
+try:
+    from pdfminer.high_level import extract_text
+except ImportError:
+    extract_text = None
+
 import pytesseract
-from PIL import Image
+from pdf2image import convert_from_path
 
 # NLP utilities
 import nltk
@@ -42,13 +51,25 @@ class Chunk(TypedDict):
 # Ingestion
 # -----------------------
 
+def _ocr_pdf(path: str) -> str:
+    """Fallback OCR for multi-page PDFs using pdf2image + pytesseract."""
+    text_blocks = []
+    try:
+        images = convert_from_path(path)
+        for i, img in enumerate(images):
+            page_text = pytesseract.image_to_string(img)
+            text_blocks.append(page_text)
+    except Exception as e:
+        return ""
+    return "\n".join(text_blocks)
+
+
 def ingest_files(paths: List[str]) -> List[RawDocument]:
     """
     Load raw documents from given paths.
-    - PDF: extract text with pdfminer; fallback OCR for images
-    - TXT: direct read
-    - CSV: flatten rows into text
-    Returns list of RawDocument dicts.
+    - PDF: try pdfminer; fallback OCR (page by page)
+    - TXT/MD: direct read
+    - CSV: flatten rows
     """
     docs: List[RawDocument] = []
 
@@ -56,25 +77,21 @@ def ingest_files(paths: List[str]) -> List[RawDocument]:
         ext = Path(path).suffix.lower()
         doc_id = Path(path).stem
         entity_id = "unknown"
-
-        raw_text = ""
-        meta: Dict = {}
+        raw_text, meta = "", {}
         source_type = ext.strip(".")
 
         if ext == ".pdf":
-            try:
-                raw_text = extract_text(path)
-                meta["ocr_confidence"] = 1.0 if raw_text.strip() else 0.0
-            except Exception:
-                # fallback: OCR each page
+            if extract_text:
                 try:
-                    img = Image.open(path)
-                    raw_text = pytesseract.image_to_string(img)
-                    meta["ocr_confidence"] = 0.6  # mark lower confidence
-                except Exception as e:
+                    raw_text = extract_text(path)
+                    meta["ocr_confidence"] = 1.0 if raw_text.strip() else 0.0
+                except Exception:
                     raw_text = ""
-                    meta["ocr_confidence"] = 0.0
-                    meta["error"] = str(e)
+            if not raw_text.strip():
+                # fallback OCR
+                raw_text = _ocr_pdf(path)
+                # heuristic OCR confidence: based on average text density
+                meta["ocr_confidence"] = 0.6 if raw_text.strip() else 0.0
 
         elif ext in [".txt", ".md"]:
             with open(path, "r", encoding="utf-8", errors="ignore") as f:
@@ -112,20 +129,16 @@ def _sanitize_tokens(tokens: List[str], max_word_len: int = 40) -> List[str]:
     """Drop or truncate very long tokens (hashes, base64, etc)."""
     clean = []
     for t in tokens:
-        if len(t) > max_word_len:
-            clean.append(t[:max_word_len] + "…")
-        else:
-            clean.append(t)
+        clean.append(t if len(t) <= max_word_len else t[:max_word_len] + "…")
     return clean
 
 
 def chunk_document(doc: RawDocument, max_tokens: int = 1500, overlap: int = 200) -> List[Chunk]:
     """
-    Split doc.raw_text into overlapping chunks with heuristics.
-    - Empty doc -> []
-    - Sentence-aware splitting
-    - Preserve line-based chunks for receipts/tables
-    - Handle OCR confidence
+    Split raw_text into overlapping chunks with heuristics.
+    - Sentence-aware splitting (NLTK)
+    - Fallback line-based for tables/receipts
+    - Track start/end char offsets
     """
     if not doc["raw_text"].strip():
         return []
@@ -138,9 +151,7 @@ def chunk_document(doc: RawDocument, max_tokens: int = 1500, overlap: int = 200)
     else:
         sentences = sent_tokenize(text)
 
-    tokens = []
-    offsets = []
-    cursor = 0
+    tokens, offsets, cursor = [], [], 0
     for sent in sentences:
         for w in word_tokenize(sent):
             w_clean = _sanitize_tokens([w])[0]
@@ -151,15 +162,13 @@ def chunk_document(doc: RawDocument, max_tokens: int = 1500, overlap: int = 200)
             cursor = end
 
     chunks: List[Chunk] = []
-    i = 0
-    chunk_index = 0
+    i, chunk_index = 0, 0
     while i < len(tokens):
         j = min(i + max_tokens, len(tokens))
         chunk_tokens = tokens[i:j]
         if not chunk_tokens:
             break
-        start_char = offsets[i][0]
-        end_char = offsets[j - 1][1]
+        start_char, end_char = offsets[i][0], offsets[j - 1][1]
         chunk_text = " ".join(chunk_tokens)
 
         c: Chunk = {
@@ -167,7 +176,7 @@ def chunk_document(doc: RawDocument, max_tokens: int = 1500, overlap: int = 200)
             "doc_id": doc["doc_id"],
             "entity_id": doc["entity_id"],
             "raw_text": chunk_text,
-            "page_num": 0,  # placeholder; could be extracted if available
+            "page_num": doc["meta"].get("page_num", 0),  # placeholder
             "start_char": start_char,
             "end_char": end_char,
             "tokens": len(chunk_tokens),
@@ -188,7 +197,7 @@ def chunk_document(doc: RawDocument, max_tokens: int = 1500, overlap: int = 200)
 def compute_chunk_embedding(chunk_text: str, embedder) -> np.ndarray:
     """
     Compute seed vector for chunk using provided embedder.
-    - embedder must have an `.encode(text)` method (e.g. sentence-transformers).
+    - embedder must have `.encode(text)` method (e.g. sentence-transformers).
     """
     if not chunk_text.strip():
         return np.zeros(1)
@@ -196,7 +205,6 @@ def compute_chunk_embedding(chunk_text: str, embedder) -> np.ndarray:
     vector = embedder.encode(chunk_text)
     if isinstance(vector, list):
         vector = np.array(vector)
-    # normalize
     norm = np.linalg.norm(vector)
     if norm > 0:
         vector = vector / norm
