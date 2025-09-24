@@ -57,7 +57,7 @@ class QueryProcessor:
         Args:
             text: Input text to embed
             
-        Returns:
+        Returns:1
             Tensor containing text embeddings
         """
         with torch.no_grad():
