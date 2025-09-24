@@ -4,7 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="28614743-e026-4aeb-a723-9dc82cd16114" name="Changes" comment="feat: modified sprns title" />
+    <list default="true" id="28614743-e026-4aeb-a723-9dc82cd16114" name="Changes" comment="orchestrator for ToT is defined">
+      <change afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/Schema/canonicalizer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/ToT/perception_orchestrator.py" beforeDir="false" afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/ToT/perception_orchestrator.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -18,6 +22,11 @@
     </option>
   </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="GitHubPullRequestSearchHistory">{
@@ -29,7 +38,7 @@
   <component name="GithubPullRequestsUISettings"><![CDATA[{
   "selectedUrlAndAccountId": {
     "url": "https://github.com/RahulKrishna8029/Hackathon_ECI_SPRNS.git",
-    "accountId": "2bc67455-f5fe-49d6-bcd8-4109b3a580f6"
+    "accountId": "617eeca4-59d7-482a-9c6f-370e1590f012"
   },
   "recentNewPullRequestHead": {
     "server": {
@@ -58,13 +67,13 @@
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "git-widget-placeholder": "EB-1",
+    "git-widget-placeholder": "rahul",
     "ignore.virus.scanning.warn.message": "true",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "C:/Users/ASUS/Documents/GitHub/Hackathon_ECI_SPRNS/Hackathon_ECI_SPRNS/venv/Dashboard",
-    "project.structure.last.edited": "Project",
+    "project.structure.last.edited": "Modules",
     "project.structure.proportion": "0.15",
-    "project.structure.side.proportion": "0.0",
+    "project.structure.side.proportion": "0.2",
     "settings.editor.selected.configurable": "configurable.group.tools"
   }
 }]]></component>
@@ -105,13 +114,22 @@
       <option name="project" value="LOCAL" />
       <updated>1758694379578</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="orchestrator for ToT is defined">
+      <option name="closed" value="true" />
+      <created>1758697599085</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1758697599085</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="feat: added sprns_ui.py" />
     <MESSAGE value="feat: added tot-perception" />
     <MESSAGE value="feat: modified sprns title" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: modified sprns title" />
+    <MESSAGE value="orchestrator for ToT is defined" />
+    <option name="LAST_COMMIT_MESSAGE" value="orchestrator for ToT is defined" />
   </component>
 </project>
