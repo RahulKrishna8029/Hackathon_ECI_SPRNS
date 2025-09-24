@@ -17,9 +17,9 @@ try:
 except ImportError:
     # Fallback if config is not available
     class Config:
-        NEO4J_URI = "bolt://localhost:7687"
+        NEO4J_URI = "neo4j+s://b8cef351.databases.neo4j.io"
         NEO4J_USERNAME = "neo4j"
-        NEO4J_PASSWORD = "password"
+        NEO4J_PASSWORD = "VwOQPOfB5YX8KfrHWfDOuo9pMScCDVK0omeItsni7tg"
         EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
         GENERATION_MODEL = "google/flan-t5-base"
 
