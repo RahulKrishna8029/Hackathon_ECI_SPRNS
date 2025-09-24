@@ -3,6 +3,19 @@
   <component name="AutoImportSettings">
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
+<<<<<<< HEAD
+  <component name="ChangeListManager">
+    <list default="true" id="28614743-e026-4aeb-a723-9dc82cd16114" name="Changes" comment="encoding of graph fragments">
+      <change afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/Projection/projector.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/Encode/encoder.py" beforeDir="false" afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/Encode/encoder.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/Ingestion/chunker.py" beforeDir="false" afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/Ingestion/chunker.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/KG/graph_constructor.py" beforeDir="false" afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/KG/graph_constructor.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/Schema/canonicalizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/Schema/canonicalizer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/ToT/llm_client.py" beforeDir="false" afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/ToT/llm_client.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/ToT/orchestrator.py" beforeDir="false" afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/ToT/orchestrator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/ToT/perception_orchestrator.py" beforeDir="false" afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/ToT/perception_orchestrator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/ToT/perceptions.py" beforeDir="false" afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/ToT/perceptions.py" afterDir="false" />
+=======
 <component name="ChangeListManager">
   <list default="true" id="28614743-e026-4aeb-a723-9dc82cd16114" 
         name="Changes" 
@@ -17,6 +30,7 @@
     <change afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/Dashboard/sprns_ui.py" afterDir="false" />
   </list>
 </component>
+>>>>>>> 4e657bf89734ab51431c1c6fd5776d05be68d076
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -147,7 +161,15 @@
       <option name="project" value="LOCAL" />
       <updated>1758699310586</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="encoding of graph fragments">
+      <option name="closed" value="true" />
+      <created>1758701634090</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1758701634090</updated>
+    </task>
+    <option name="localTasksCounter" value="8" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -157,6 +179,7 @@
     <MESSAGE value="orchestrator for ToT is defined" />
     <MESSAGE value="canonicalization of grpahs in defined and integrated into orchestrator" />
     <MESSAGE value="assembling graph segments into a graph fragment" />
-    <option name="LAST_COMMIT_MESSAGE" value="assembling graph segments into a graph fragment" />
+    <MESSAGE value="encoding of graph fragments" />
+    <option name="LAST_COMMIT_MESSAGE" value="encoding of graph fragments" />
   </component>
 </project>

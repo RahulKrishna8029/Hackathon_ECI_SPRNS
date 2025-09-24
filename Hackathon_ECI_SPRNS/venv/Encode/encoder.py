@@ -35,13 +35,15 @@ def fragment_to_text(fragment: GraphFragment) -> str:
 # ---------------------------
 
 class GraphEncoderLLM:
-    def __init__(self, llm_client, model: str = "text-embedding-3-large"):
+    def __init__(self, llm_client, model: str = "text-embedding-3-large", expected_dim: int = 3072):
         """
         :param llm_client: must implement `.embed(text, model)` returning vector
-        :param model: embedding model name (default OpenAI text-embedding-3-large)
+        :param model: embedding model name
+        :param expected_dim: expected embedding dimensionality (default 3072 for OpenAI large model)
         """
         self.llm_client = llm_client
         self.model = model
+        self.expected_dim = expected_dim
 
     def embed_fragment(self, fragment: GraphFragment, persist: bool = True) -> np.ndarray:
         """
@@ -52,18 +54,30 @@ class GraphEncoderLLM:
             vector = self.llm_client.embed(text, self.model)
         except Exception as e:
             logger.error("Embedding failed for fragment %s: %s", fragment.fragment_id, e)
-            vector = np.zeros(128).tolist()  # fallback
+            vector = np.zeros(self.expected_dim).tolist()  # fallback
+            failure = True
+        else:
+            failure = False
 
         vec = np.array(vector, dtype=float)
+
+        # Normalize
         norm = np.linalg.norm(vec)
         if norm > 0:
             vec = vec / norm
+        else:
+            logger.warning("Zero vector produced for fragment %s", fragment.fragment_id)
 
         if persist:
-            # attach to fragment for downstream use
-            fragment.phi_emb = vec
+            # Attach embedding into fragment (typed)
             fragment.provenance["embedding_model"] = self.model
             fragment.provenance["embedding_dim"] = len(vec)
+            fragment.provenance["embedding_failed"] = failure
+            # Add phi_emb explicitly
+            if not hasattr(fragment, "phi_emb"):
+                setattr(fragment, "phi_emb", vec)
+            else:
+                fragment.phi_emb = vec
 
         return vec
 
@@ -72,4 +86,11 @@ class GraphEncoderLLM:
         Compute embeddings for multiple fragments.
         NOTE: Uses naive loop; for OpenAI you could batch to save cost.
         """
-        return [self.embed_fragment(f, persist=persist) for f in fragments]
+        results = []
+        for f in fragments:
+            vec = self.embed_fragment(f, persist=persist)
+            if vec.shape[0] != self.expected_dim:
+                logger.warning("Fragment %s embedding dim %d != expected %d",
+                               f.fragment_id, vec.shape[0], self.expected_dim)
+            results.append(vec)
+        return results

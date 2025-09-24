@@ -9,7 +9,7 @@ import logging
 from dataclasses import dataclass
 from typing import List, Dict, Any
 
-from Hackathon_ECI_SPRNS.venv.Schema.canonicalizer import canonicalize_nodes_relations, _embed_label
+from Hackathon_ECI_SPRNS.venv.Schema import canonicalizer
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,13 @@ class GraphFragment:
 # Helpers
 # ---------------------------
 
+def _embed_any(label_or_uid: str) -> np.ndarray:
+    """
+    Wrapper around canonicalizer._embed_label, which may call LLM embedder if available.
+    """
+    return canonicalizer._embed_label(label_or_uid)
+
+
 def _aggregate_schema_embeddings(graph: Dict[str, Any]) -> np.ndarray:
     """
     Aggregate schema embeddings of all nodes + relations in the graph.
@@ -39,26 +46,28 @@ def _aggregate_schema_embeddings(graph: Dict[str, Any]) -> np.ndarray:
     vecs = []
     for n in graph.get("nodes", []):
         if "uid" in n:
-            vecs.append(_embed_label(n["uid"]))  # ✅ use canonical UID if available
+            vecs.append(_embed_any(n["uid"]))
         elif "label" in n:
-            vecs.append(_embed_label(n["label"]))
+            vecs.append(_embed_any(n["label"]))
     for r in graph.get("relations", []):
         if "uid" in r:
-            vecs.append(_embed_label(r["uid"]))
+            vecs.append(_embed_any(r["uid"]))
         elif "type" in r:
-            vecs.append(_embed_label(r["type"]))
+            vecs.append(_embed_any(r["type"]))
 
     if not vecs:
         return np.zeros(128)
 
     mat = np.vstack(vecs)
-    return np.mean(mat, axis=0)
+    mean_vec = np.mean(mat, axis=0)
+    return mean_vec / (np.linalg.norm(mean_vec) + 1e-8)
 
 
-def _build_adjacency(graph: Dict[str, Any], uid_dim: int = 128) -> np.ndarray:
+def _build_adjacency_embedding(graph: Dict[str, Any], uid_dim: int = 128, max_dim: int = 256) -> np.ndarray:
     """
-    Simplified adjacency encoding.
-    Uses canonical UIDs if available, else falls back to labels.
+    Build adjacency signature as low-rank embedding.
+    - Compute adjacency outer products in embedding space.
+    - Compress with SVD to fixed dim (max_dim).
     """
     A = np.zeros((uid_dim, uid_dim))
     nodes = {n.get("uid", n.get("label")): n for n in graph.get("nodes", [])}
@@ -67,10 +76,30 @@ def _build_adjacency(graph: Dict[str, Any], uid_dim: int = 128) -> np.ndarray:
         dst_key = r.get("to")
         src_label = nodes.get(src_key, {}).get("uid") or nodes.get(src_key, {}).get("label") or str(src_key)
         dst_label = nodes.get(dst_key, {}).get("uid") or nodes.get(dst_key, {}).get("label") or str(dst_key)
-        src = _embed_label(src_label)
-        dst = _embed_label(dst_label)
+        src = _embed_any(src_label)
+        dst = _embed_any(dst_label)
         A += np.outer(src, dst)
-    return A
+
+    if not np.any(A):
+        return np.zeros(max_dim)
+
+    # Low-rank projection via SVD
+    try:
+        U, S, Vt = np.linalg.svd(A, full_matrices=False)
+        vec = (U[:, 0] * S[0]) if S.size > 0 else np.zeros(uid_dim)
+    except Exception as e:
+        logger.warning("Adjacency SVD failed: %s", e)
+        vec = A.mean(axis=0)
+
+    # Compress or pad to max_dim
+    if vec.shape[0] > max_dim:
+        vec = vec[:max_dim]
+    elif vec.shape[0] < max_dim:
+        pad = np.zeros(max_dim)
+        pad[: vec.shape[0]] = vec
+        vec = pad
+
+    return vec / (np.linalg.norm(vec) + 1e-8)
 
 
 # ---------------------------
@@ -80,21 +109,19 @@ def _build_adjacency(graph: Dict[str, Any], uid_dim: int = 128) -> np.ndarray:
 def construct_fragment(branch_result, canonicalize: bool = False) -> GraphFragment:
     """
     Convert BranchResult.final_graph into a canonical GraphFragment.
-    :param canonicalize: If True, run canonicalization here.
-                         Usually set to False if already canonicalized upstream.
     """
     graph = branch_result.final_graph or {"nodes": [], "relations": []}
 
     # Canonicalize if requested
     if canonicalize:
-        graph = canonicalize_nodes_relations(graph, perception=branch_result.perception)
+        graph = canonicalizer.canonicalize_nodes_relations(graph, perception=branch_result.perception)
+    else:
+        if not any("uid" in n for n in graph.get("nodes", [])):
+            logger.warning("Graph passed without canonicalization and no UIDs found (branch=%s)", branch_result.branch_id)
 
     # Compute φ_raw = schema aggregate + adjacency signature
     phi_schema = _aggregate_schema_embeddings(graph)
-    A = _build_adjacency(graph)
-
-    # ⚠️ Flatten adjacency instead of mean-only
-    phi_adj = A.flatten()[:512]  # truncate or compress to manageable size
+    phi_adj = _build_adjacency_embedding(graph)
     phi_raw = np.concatenate([phi_schema, phi_adj])
 
     # Defensive entity_id retrieval
@@ -104,6 +131,8 @@ def construct_fragment(branch_result, canonicalize: bool = False) -> GraphFragme
             or getattr(branch_result, "entity_id", None)
             or "unknown"
     )
+    if entity_id == "unknown":
+        logger.warning("Entity ID missing for fragment %s", branch_result.branch_id)
 
     # Provenance enrichment
     provenance = {
@@ -112,6 +141,7 @@ def construct_fragment(branch_result, canonicalize: bool = False) -> GraphFragme
         "loglik": branch_result.loglik,
         "chunk_meta": branch_result.provenance.get("chunk_meta", {}),
         "processed_chunks": branch_result.provenance.get("processed_chunks", []),
+        "schema_focus": branch_result.provenance.get("schema_focus"),
     }
 
     # Logging

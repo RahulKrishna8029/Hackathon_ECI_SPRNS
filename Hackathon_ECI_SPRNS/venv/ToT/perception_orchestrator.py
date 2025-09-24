@@ -1,7 +1,11 @@
 """
 Module: src/tot/perception_orchestrator.py
 Purpose: Orchestrate Tree-of-Thought reasoning with perception functions.
-Each branch = one perception applied across all chunks.
+Improvements:
+ - Collects per-chunk provenance
+ - Aggregates LLM meta into perception-level provenance
+ - Keeps track of processed chunk ids + per-chunk loglik
+ - Simple perception score summary for optional selection
 """
 
 from __future__ import annotations
@@ -26,10 +30,11 @@ class PerceptionOrchestrator:
             perceptions: Optional[List[str]] = None,
             max_branches_per_perception: int = 1,
             temperature: float = 0.0,
+            canonicalize: bool = True,
     ) -> Dict[str, BranchResult]:
         """
         Run ToT with one branch per perception across all chunks.
-        Returns dict { perception_name : BranchResult }.
+        Returns dict { perception_name : BranchResult } where each BranchResult.final_graph is canonicalized.
         """
         if perceptions is None:
             perceptions = list_perceptions().keys()
@@ -42,6 +47,7 @@ class PerceptionOrchestrator:
 
             combined_graph, combined_steps, total_score = {"nodes": [], "relations": []}, [], 0.0
             processed_chunks = []
+            per_chunk_provenance = []
 
             for chunk in chunks:
                 branches = self.base_orch.generate_branches(
@@ -49,31 +55,47 @@ class PerceptionOrchestrator:
                     perception=pname,
                     max_branches=max_branches_per_perception,
                     temperature=temperature,
-                    canonicalize=False,  # canonicalize explicitly below
+                    canonicalize_steps=False,
                 )
-                if branches:
-                    best = branches[0]
+                if not branches:
+                    continue
 
-                    # ✅ Canonicalize the graph before merging
-                    canon_graph = canonicalize_nodes_relations(best.final_graph, perception=pname)
-                    best.final_graph = canon_graph  # overwrite with canonicalized version
+                best = branches[0]
 
-                    combined_graph = aggregate_step_to_graph(combined_graph, canon_graph)
-                    combined_steps.extend(best.steps)
-                    total_score += best.loglik
-                    processed_chunks.append(chunk["chunk_id"])
+                # canonicalize the branch graph (if requested)
+                if canonicalize:
+                    try:
+                        canon_graph = canonicalize_nodes_relations(best.final_graph, perception=pname)
+                        best.final_graph = canon_graph
+                    except Exception as e:
+                        logger.debug("Canonicalization failed for chunk %s: %s", chunk.get("chunk_id"), e)
+                        canon_graph = best.final_graph
 
+                combined_graph = aggregate_step_to_graph(combined_graph, best.final_graph)
+                combined_steps.extend(best.steps)
+                total_score += best.loglik
+                processed_chunks.append(chunk.get("chunk_id"))
+                per_chunk_provenance.append({
+                    "chunk_id": chunk.get("chunk_id"),
+                    "branch_id": best.branch_id,
+                    "loglik": best.loglik,
+                    "num_steps": len(best.steps),
+                })
+
+            # Build perception-level BranchResult
             br = BranchResult(
                 branch_id=f"perception_{pname}",
                 chunk_id="ALL",
                 perception=pname,
                 steps=combined_steps,
-                final_graph=combined_graph,  # ✅ already canonicalized
+                final_graph=combined_graph,
                 loglik=total_score,
                 provenance={
                     "mode": "perception",
                     "schema_focus": perception.schema_focus,
-                    "processed_chunks": processed_chunks,  # ✅ track which chunks contributed
+                    "schema_context": perception.to_prompt_context(),
+                    "processed_chunks": processed_chunks,
+                    "per_chunk_provenance": per_chunk_provenance,
                 },
             )
             results[pname] = br
