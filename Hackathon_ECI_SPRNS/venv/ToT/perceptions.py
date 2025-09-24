@@ -1,13 +1,14 @@
 """
 Module: src/tot/perceptions.py
 Purpose: Define candidate Perception Functions (π_k) for KG extraction.
-Each perception is a schema lens applied across all chunks, producing
-a perception-specific subgraph. The ToT orchestrator can assign one
-perception per branch, and then merge the resulting subgraphs.
+Improvements:
+ - schema validation
+ - optional versioning
+ - helpers to obtain prompt-ready schema contexts
 """
 
 from typing import Dict, Any, List
-
+import datetime
 
 class Perception:
     """
@@ -15,29 +16,32 @@ class Perception:
     Stores schema focus (nodes/relations) and description.
     """
 
-    def __init__(self, name: str, description: str, schema_focus: Dict[str, List[str]]):
+    def __init__(self, name: str, description: str, schema_focus: Dict[str, List[str]], version: str = "v1"):
+        if "nodes" not in schema_focus or "relations" not in schema_focus:
+            raise ValueError("schema_focus must contain 'nodes' and 'relations' lists.")
         self.name = name
         self.description = description
-        self.schema_focus = schema_focus
+        self.schema_focus = {"nodes": list(schema_focus["nodes"]), "relations": list(schema_focus["relations"])}
+        self.version = version
+        self.created_at = datetime.datetime.utcnow().isoformat()
 
     def to_prompt_context(self) -> str:
         """
         Return a compact text block describing schema focus,
         usable in prompt templates for the LLM.
         """
+        nodes = ", ".join(self.schema_focus.get("nodes", []))
+        rels = ", ".join(self.schema_focus.get("relations", []))
         return (
-            f"Perception: {self.name}\n"
+            f"Perception: {self.name} (schema version: {self.version})\n"
             f"Description: {self.description}\n"
-            f"Schema focus (restrict extraction to these):\n"
-            f"  Nodes = {self.schema_focus.get('nodes',[])}\n"
-            f"  Relations = {self.schema_focus.get('relations',[])}"
+            f"Only attempt to extract these node labels: {nodes}\n"
+            f"And these relation types: {rels}\n"
+            f"If none apply, return empty arrays."
         )
 
     def __repr__(self) -> str:
-        return f"Perception(name={self.name}, nodes={len(self.schema_focus.get('nodes', []))}, relations={len(self.schema_focus.get('relations', []))})"
-
-    def __str__(self) -> str:
-        return self.to_prompt_context()
+        return f"Perception(name={self.name}, nodes={len(self.schema_focus['nodes'])}, rels={len(self.schema_focus['relations'])}, version={self.version})"
 
 
 # ---------------------------
@@ -52,6 +56,7 @@ PERCEPTIONS: Dict[str, Perception] = {
             "nodes": ["Name", "DOB", "Address", "Phone", "Email"],
             "relations": ["updated_to", "verified_by"],
         },
+        version="v1",
     ),
     "transaction": Perception(
         name="transaction",
@@ -60,6 +65,7 @@ PERCEPTIONS: Dict[str, Perception] = {
             "nodes": ["Transaction", "Account", "Merchant", "Timestamp"],
             "relations": ["made_by", "sent_to", "received_from"],
         },
+        version="v1",
     ),
     "behavioral": Perception(
         name="behavioral",
@@ -68,6 +74,7 @@ PERCEPTIONS: Dict[str, Perception] = {
             "nodes": ["Device", "Channel", "Location"],
             "relations": ["accessed_from", "logged_in", "attempted_at"],
         },
+        version="v1",
     ),
     "relational": Perception(
         name="relational",
@@ -76,6 +83,7 @@ PERCEPTIONS: Dict[str, Perception] = {
             "nodes": ["Customer", "Employer", "Family", "Partner"],
             "relations": ["employed_at", "related_to", "authorized_by"],
         },
+        version="v1",
     ),
     "risk": Perception(
         name="risk",
@@ -84,6 +92,7 @@ PERCEPTIONS: Dict[str, Perception] = {
             "nodes": ["Transaction", "WatchlistEntity", "Rule"],
             "relations": ["flagged_by", "violates", "linked_to"],
         },
+        version="v1",
     ),
     "temporal": Perception(
         name="temporal",
@@ -92,6 +101,7 @@ PERCEPTIONS: Dict[str, Perception] = {
             "nodes": ["Event", "Timestamp"],
             "relations": ["preceded_by", "updated_at", "valid_until"],
         },
+        version="v1",
     ),
     "semantic": Perception(
         name="semantic",
@@ -100,6 +110,7 @@ PERCEPTIONS: Dict[str, Perception] = {
             "nodes": ["Concept", "Category", "Document"],
             "relations": ["is_a", "refers_to", "describes"],
         },
+        version="v1",
     ),
 }
 

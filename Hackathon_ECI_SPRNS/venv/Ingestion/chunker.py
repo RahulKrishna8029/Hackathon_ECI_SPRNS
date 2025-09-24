@@ -1,18 +1,19 @@
 """
 Module: src/ingest/chunker.py
-Purpose: Document ingestion + chunking.
+Purpose: Document ingestion + chunking with provenance and OCR fallback.
 """
 
-# PDF/Text handling
 from pathlib import Path
 from typing import List, Dict, TypedDict, Optional
-
+import os
+import time
 import numpy as np
 
+# PDF/Text handling
 try:
-    from pdfminer.high_level import extract_text
+    from pdfminer.high_level import extract_text, extract_pages
 except ImportError:
-    extract_text = None
+    extract_text, extract_pages = None, None
 
 import pytesseract
 from pdf2image import convert_from_path
@@ -51,17 +52,17 @@ class Chunk(TypedDict):
 # Ingestion
 # -----------------------
 
-def _ocr_pdf(path: str) -> str:
-    """Fallback OCR for multi-page PDFs using pdf2image + pytesseract."""
-    text_blocks = []
+def _ocr_pdf(path: str) -> List[Dict[str, str]]:
+    """OCR each page of a PDF into a list of dicts with page_num + text."""
+    results = []
     try:
         images = convert_from_path(path)
-        for i, img in enumerate(images):
+        for i, img in enumerate(images, start=1):
             page_text = pytesseract.image_to_string(img)
-            text_blocks.append(page_text)
+            results.append({"page_num": i, "text": page_text})
     except Exception as e:
-        return ""
-    return "\n".join(text_blocks)
+        return []
+    return results
 
 
 def ingest_files(paths: List[str]) -> List[RawDocument]:
@@ -79,34 +80,51 @@ def ingest_files(paths: List[str]) -> List[RawDocument]:
         entity_id = "unknown"
         raw_text, meta = "", {}
         source_type = ext.strip(".")
+        t0 = time.time()
 
-        if ext == ".pdf":
-            if extract_text:
-                try:
-                    raw_text = extract_text(path)
-                    meta["ocr_confidence"] = 1.0 if raw_text.strip() else 0.0
-                except Exception:
-                    raw_text = ""
-            if not raw_text.strip():
-                # fallback OCR
-                raw_text = _ocr_pdf(path)
-                # heuristic OCR confidence: based on average text density
-                meta["ocr_confidence"] = 0.6 if raw_text.strip() else 0.0
+        try:
+            if ext == ".pdf":
+                meta["num_pages"] = None
+                if extract_text is not None:
+                    try:
+                        raw_text = extract_text(path)
+                        meta["ocr_confidence"] = 1.0 if raw_text.strip() else 0.0
+                        if extract_pages is not None:
+                            meta["num_pages"] = sum(1 for _ in extract_pages(path))
+                    except Exception as e:
+                        raw_text = ""
+                        meta["error"] = f"pdfminer failed: {e}"
 
-        elif ext in [".txt", ".md"]:
-            with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                raw_text = f.read()
-            meta["ocr_confidence"] = 1.0
+                if not raw_text.strip():
+                    # fallback OCR per page
+                    page_texts = _ocr_pdf(path)
+                    raw_text = "\n".join([p["text"] for p in page_texts])
+                    meta["ocr_confidence"] = 0.6 if raw_text.strip() else 0.0
+                    meta["num_pages"] = len(page_texts)
 
-        elif ext == ".csv":
-            with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                rows = f.readlines()
-            raw_text = "\n".join([row.strip() for row in rows])
-            meta["ocr_confidence"] = 1.0
+            elif ext in [".txt", ".md"]:
+                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                    raw_text = f.read()
+                meta["ocr_confidence"] = 1.0
 
-        else:
-            meta["ocr_confidence"] = 0.0
-            meta["error"] = f"Unsupported file type: {ext}"
+            elif ext == ".csv":
+                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                    rows = f.readlines()
+                raw_text = "\n".join([row.strip() for row in rows])
+                meta["ocr_confidence"] = 1.0
+
+            else:
+                meta["ocr_confidence"] = 0.0
+                meta["error"] = f"Unsupported file type: {ext}"
+
+        except Exception as e:
+            meta["error"] = f"Failed to ingest: {e}"
+            raw_text = ""
+
+        meta.update({
+            "file_size": os.path.getsize(path) if os.path.exists(path) else None,
+            "ingestion_time": time.time() - t0,
+        })
 
         doc: RawDocument = {
             "doc_id": doc_id,
@@ -127,10 +145,7 @@ def ingest_files(paths: List[str]) -> List[RawDocument]:
 
 def _sanitize_tokens(tokens: List[str], max_word_len: int = 40) -> List[str]:
     """Drop or truncate very long tokens (hashes, base64, etc)."""
-    clean = []
-    for t in tokens:
-        clean.append(t if len(t) <= max_word_len else t[:max_word_len] + "…")
-    return clean
+    return [t if len(t) <= max_word_len else t[:max_word_len] + "…" for t in tokens]
 
 
 def chunk_document(doc: RawDocument, max_tokens: int = 1500, overlap: int = 200) -> List[Chunk]:
@@ -151,15 +166,17 @@ def chunk_document(doc: RawDocument, max_tokens: int = 1500, overlap: int = 200)
     else:
         sentences = sent_tokenize(text)
 
-    tokens, offsets, cursor = [], [], 0
+    tokens, offsets = [], []
+    cursor = 0
     for sent in sentences:
         for w in word_tokenize(sent):
             w_clean = _sanitize_tokens([w])[0]
             tokens.append(w_clean)
-            start = text.find(w, cursor)
-            end = start + len(w)
+            # robust offset tracking
+            start = cursor
+            end = cursor + len(w)
             offsets.append((start, end))
-            cursor = end
+            cursor = end + 1  # +1 to account for space
 
     chunks: List[Chunk] = []
     i, chunk_index = 0, 0
@@ -176,7 +193,7 @@ def chunk_document(doc: RawDocument, max_tokens: int = 1500, overlap: int = 200)
             "doc_id": doc["doc_id"],
             "entity_id": doc["entity_id"],
             "raw_text": chunk_text,
-            "page_num": doc["meta"].get("page_num", 0),  # placeholder
+            "page_num": doc["meta"].get("page_num", 0),  # better page tracking later
             "start_char": start_char,
             "end_char": end_char,
             "tokens": len(chunk_tokens),
