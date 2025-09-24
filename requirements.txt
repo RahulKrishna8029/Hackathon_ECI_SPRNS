@@ -1,9 +1,5 @@
-langchain
-faiss-cpu
-torch
-transformers
-sentence-transformers
-neo4j
-numpy
-python-dotenv
-pytest
+openai>=1.0.0
+numpy>=1.21.0
+neo4j>=5.12.0
+python-dotenv>=1.0.0
+pytest>=7.4.2
