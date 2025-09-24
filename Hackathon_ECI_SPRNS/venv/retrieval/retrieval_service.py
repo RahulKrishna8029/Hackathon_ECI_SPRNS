@@ -6,9 +6,9 @@ Integrates query processing, document retrieval, and answer generation.
 import os
 import sys
 from typing import List, Dict, Any, Optional
-from retrieval.core.query_processor import QueryProcessor
-from retrieval.core.answer_generator import AnswerGenerator
-from retrieval.utils.neo4j_connector import Neo4jConnector
+from Hackathon_ECI_SPRNS.venv.retrieval.core.query_processor import QueryProcessor
+from Hackathon_ECI_SPRNS.venv.retrieval.core.answer_generator import AnswerGenerator
+from Hackathon_ECI_SPRNS.venv.retrieval.utils.neo4j_connector import Neo4jConnector
 
 # Add parent directory to path for config import
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -67,7 +67,7 @@ class RetrievalService:
             try:
                 # Import and use mock connector
                 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-                from mock_graph.mock_neo4j import MockNeo4jConnector
+                from Hackathon_ECI_SPRNS.venv.mock_graph.mock_neo4j import MockNeo4jConnector
                 self.neo4j_connector = MockNeo4jConnector(
                     uri=neo4j_uri,
                     username=neo4j_username,
