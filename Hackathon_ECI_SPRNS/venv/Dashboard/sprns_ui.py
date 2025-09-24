@@ -35,3 +35,5 @@ if user_input:
 
     st.session_state["messages"].append({"role": "assistant", "content": reply})
     st.chat_message("assistant").write(reply)
+
+
