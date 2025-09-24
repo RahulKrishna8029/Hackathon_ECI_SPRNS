@@ -10,6 +10,7 @@ import logging
 
 from Hackathon_ECI_SPRNS.venv.ToT.perceptions import list_perceptions, get_perception
 from Hackathon_ECI_SPRNS.venv.ToT.orchestrator import ToTOrchestrator, BranchResult, aggregate_step_to_graph
+from Hackathon_ECI_SPRNS.venv.Schema.canonicalizer import canonicalize_nodes_relations
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -29,31 +30,45 @@ class PerceptionOrchestrator:
         if perceptions is None:
             perceptions = list_perceptions().keys()
         results: Dict[str, BranchResult] = {}
+
         for pname in perceptions:
             logger.info("=== Starting perception: %s ===", pname)
             perception = get_perception(pname)
+
             combined_graph, combined_steps, total_score = {"nodes": [], "relations": []}, [], 0.0
+
             for chunk in chunks:
                 branches = self.base_orch.generate_branches(
-                    chunk=chunk, perception=pname,
+                    chunk=chunk,
+                    perception=pname,
                     max_branches=max_branches_per_perception,
                     temperature=temperature,
                 )
                 if branches:
                     best = branches[0]
-                    combined_graph = aggregate_step_to_graph(combined_graph, best.final_graph)
+
+                    # ✅ Canonicalize the graph before merging
+                    canon_graph = canonicalize_nodes_relations(best.final_graph, perception=pname)
+                    best.final_graph = canon_graph  # overwrite with canonicalized version
+
+                    combined_graph = aggregate_step_to_graph(combined_graph, canon_graph)
                     combined_steps.extend(best.steps)
                     total_score += best.loglik
+
             br = BranchResult(
                 branch_id=f"perception_{pname}",
                 chunk_id="ALL",
                 perception=pname,
                 steps=combined_steps,
-                final_graph=combined_graph,
+                final_graph=combined_graph,  # ✅ already canonicalized
                 loglik=total_score,
-                provenance={"mode": "perception", "schema_focus": perception.schema_focus},
+                provenance={
+                    "mode": "perception",
+                    "schema_focus": perception.schema_focus,
+                },
             )
             results[pname] = br
+
         return results
 
 
