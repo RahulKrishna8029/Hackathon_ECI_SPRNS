@@ -4,9 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="28614743-e026-4aeb-a723-9dc82cd16114" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/.idea/vcs.xml" afterDir="false" />
+    <list default="true" id="28614743-e026-4aeb-a723-9dc82cd16114" name="Changes" comment="feat: added sprns_ui.py">
+      <change afterPath="$PROJECT_DIR$/Hackathon_ECI_SPRNS/venv/Schema/tree_of_thought_perception.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -50,16 +50,22 @@
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "git-widget-placeholder": "EB-1",
     "ignore.virus.scanning.warn.message": "true",
     "kotlin-language-version-configured": "true",
-    "last_opened_file_path": "C:/Users/ASUS/Documents/GitHub/Hackathon_ECI_SPRNS",
+    "last_opened_file_path": "C:/Users/ASUS/Documents/GitHub/Hackathon_ECI_SPRNS/Hackathon_ECI_SPRNS/venv/Dashboard",
     "project.structure.last.edited": "Project",
     "project.structure.proportion": "0.15",
     "project.structure.side.proportion": "0.0",
     "settings.editor.selected.configurable": "configurable.group.tools"
   }
 }]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\ASUS\Documents\GitHub\Hackathon_ECI_SPRNS\Hackathon_ECI_SPRNS\venv\Dashboard" />
+    </key>
+  </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
       <changelist id="28614743-e026-4aeb-a723-9dc82cd16114" name="Changes" comment="" />
@@ -68,6 +74,19 @@
       <option name="presentableId" value="Default" />
       <updated>1758688945182</updated>
     </task>
+    <task id="LOCAL-00001" summary="feat: added sprns_ui.py">
+      <option name="closed" value="true" />
+      <created>1758691401068</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1758691401068</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="feat: added sprns_ui.py" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: added sprns_ui.py" />
   </component>
 </project>
